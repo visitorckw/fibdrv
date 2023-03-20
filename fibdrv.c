@@ -6,6 +6,8 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
+#include <linux/slab.h>
+#include <linux/string.h>
 
 MODULE_LICENSE("Dual MIT/GPL");
 MODULE_AUTHOR("National Cheng Kung University, Taiwan");
@@ -39,6 +41,83 @@ static long long fib_sequence(long long k)
     return f[k];
 }
 
+static void reverse_str(char *str)
+{
+    size_t len = strlen(str);
+    for (int i = 0; i < len / 2; i++) {
+        char tmp = str[i];
+        str[i] = str[len - 1 - i];
+        str[len - 1 - i] = tmp;
+    }
+}
+static void string_number_add(char *a, char *b, char *c)
+{
+    if (strlen(a) < strlen(b)) {
+        char *tmp = a;
+        a = b;
+        b = tmp;
+    }
+    size_t lenA = strlen(a);
+    size_t lenB = strlen(b);
+
+    reverse_str(a);
+    reverse_str(b);
+
+    int carry = 0, i = 0;
+    for (i = 0; i < lenA; i++) {
+        int numA = a[i] - '0';
+        int numB = (i < lenB ? b[i] - '0' : 0);
+        c[i] = numA + numB + carry;
+        carry = c[i] / 10;
+        c[i] %= 10;
+        c[i] += '0';
+    }
+
+    if (carry)
+        c[i++] = '1';
+    c[i] = '\0';
+    reverse_str(a);
+    reverse_str(b);
+    reverse_str(c);
+}
+static long long fib(long long k, void *buf)
+{
+    char *a = kmalloc(128 * sizeof(char), GFP_KERNEL);
+    char *b = kmalloc(128 * sizeof(char), GFP_KERNEL);
+    char *c = kmalloc(128 * sizeof(char), GFP_KERNEL);
+    a[0] = '0';
+    b[0] = '1';
+    a[1] = b[1] = '\0';
+    if (k == 0) {
+        copy_to_user(buf, a, sizeof(char) * 128);
+        return strlen(a);
+    }
+    if (k == 1) {
+        copy_to_user(buf, b, sizeof(char) * 128);
+        return strlen(b);
+    }
+
+    for (int i = 2; i <= k; i++) {
+        string_number_add(a, b, c);
+        char *tmp = a;
+        a = b;
+        b = c;
+        c = tmp;
+    }
+
+    if (__copy_to_user(buf, b, strlen(b))) {
+        kfree(a);
+        kfree(b);
+        kfree(c);
+        return -EFAULT;
+    }
+    size_t len = strlen(b);
+    kfree(a);
+    kfree(b);
+    kfree(c);
+    return len;
+}
+
 static int fib_open(struct inode *inode, struct file *file)
 {
     if (!mutex_trylock(&fib_mutex)) {
@@ -60,7 +139,8 @@ static ssize_t fib_read(struct file *file,
                         size_t size,
                         loff_t *offset)
 {
-    return (ssize_t) fib_sequence(*offset);
+    // return (ssize_t) fib_sequence(*offset);
+    return (ssize_t) fib(*offset, buf);
 }
 
 /* write operation is skipped */
