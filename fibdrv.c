@@ -4,6 +4,7 @@
 #include <linux/init.h>
 #include <linux/kdev_t.h>
 #include <linux/kernel.h>
+#include <linux/ktime.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/slab.h>
@@ -19,7 +20,8 @@ MODULE_VERSION("0.1");
 /* MAX_LENGTH is set to 92 because
  * ssize_t can't fit the number > 92
  */
-#define MAX_LENGTH 92
+#define MAX_LENGTH 500
+#define TIME_MEASSURE
 
 static dev_t fib_dev = 0;
 static struct cdev *fib_cdev;
@@ -118,6 +120,36 @@ static long long fib(long long k, void *buf)
     return len;
 }
 
+#ifdef TIME_MEASSURE
+static ktime_t kt;
+
+static long long fib_time_proxy(long long k, char *buf)
+{
+    kt = ktime_get();
+    // long long result = fib_sequence(k);
+    long long result = fib(k, buf);
+    kt = ktime_sub(ktime_get(), kt);
+
+    return result;
+}
+
+static ssize_t fib_read(struct file *file,
+                        char *buf,
+                        size_t size,
+                        loff_t *offset)
+{
+    return (ssize_t) fib_time_proxy(*offset, buf);
+}
+
+static ssize_t fib_write(struct file *file,
+                         const char *buf,
+                         size_t size,
+                         loff_t *offset)
+{
+    return ktime_to_ns(kt);
+}
+#endif
+
 static int fib_open(struct inode *inode, struct file *file)
 {
     if (!mutex_trylock(&fib_mutex)) {
@@ -133,6 +165,7 @@ static int fib_release(struct inode *inode, struct file *file)
     return 0;
 }
 
+#ifndef TIME_MEASSURE
 /* calculate the fibonacci number at given offset */
 static ssize_t fib_read(struct file *file,
                         char *buf,
@@ -151,6 +184,7 @@ static ssize_t fib_write(struct file *file,
 {
     return 1;
 }
+#endif
 
 static loff_t fib_device_lseek(struct file *file, loff_t offset, int orig)
 {

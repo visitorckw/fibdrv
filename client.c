@@ -3,9 +3,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
+#include <time.h>
 #include <unistd.h>
 
 #define FIB_DEV "/dev/fibonacci"
+#define TIME_MEASSURE
 
 int main()
 {
@@ -26,6 +28,28 @@ int main()
         printf("Writing to " FIB_DEV ", returned the sequence %lld\n", sz);
     }
 
+#ifdef TIME_MEASSURE
+    FILE *outputFile = fopen("data.txt", "w");
+    for (int i = 0; i <= offset; i++) {
+        lseek(fd, i, SEEK_SET);
+        struct timespec tstart = {0, 0}, tend = {0, 0};
+        clock_gettime(CLOCK_MONOTONIC, &tstart);
+        sz = read(fd, buf, 128);
+        clock_gettime(CLOCK_MONOTONIC, &tend);
+        long long usertime = (1e9 * tend.tv_sec + tend.tv_nsec) -
+                             (1e9 * tstart.tv_sec + tstart.tv_nsec);
+        long long kerneltime = write(fd, write_buf, strlen(write_buf));
+        fprintf(outputFile, "%d %lld %lld %lld\n", i, kerneltime, usertime,
+                usertime - kerneltime);
+        printf("Reading from " FIB_DEV
+               " at offset %d, returned the sequence "
+               "%s.\n",
+               i, buf);
+        printf("Writing to " FIB_DEV ", returned the sequence %lld\n",
+               kerneltime);
+    }
+#endif
+#ifndef TIME_MEASSURE
     for (int i = 0; i <= offset; i++) {
         lseek(fd, i, SEEK_SET);
         sz = read(fd, buf, 128);
@@ -43,6 +67,7 @@ int main()
                "%s.\n",
                i, buf);
     }
+#endif
 
     close(fd);
     return 0;
