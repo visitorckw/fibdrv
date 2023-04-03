@@ -105,7 +105,7 @@ static long long fib(long long k, void *buf)
         c = tmp;
     }
 
-    if (__copy_to_user(buf, b, strlen(b))) {
+    if (__copy_to_user(buf, b, strlen(b) + 1)) {
         kfree(a);
         kfree(b);
         kfree(c);
