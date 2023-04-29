@@ -9,6 +9,7 @@
 #include <linux/mutex.h>
 #include <linux/slab.h>
 #include <linux/string.h>
+#include "bignum.h"
 #include "bn_kernel.h"
 
 MODULE_LICENSE("Dual MIT/GPL");
@@ -154,6 +155,16 @@ static long long bn_fib_loader(long long int k, void *buf)
     kfree(p);
     return left;  // return number of bytes that could not be copied
 }
+static long long bignum_fib_loader(long long int k, void *buf)
+{
+    bignum *res = fib_bignum_fastdouble(k);
+    char *p = convert2Hex(res);
+    size_t len = strlen(p) + 1;
+    size_t left = copy_to_user(buf, p, len);
+    FREE(res);
+    kfree(p);
+    return left;
+}
 
 #ifdef TIME_MEASSURE
 static ktime_t kt;
@@ -176,6 +187,10 @@ static long long fib_time_proxy(long long k,
         break;
     case 3:
         result = bn_fib_loader(k, buf);
+        break;
+
+    case 4:
+        result = bignum_fib_loader(k, buf);
         break;
     }
     kt = ktime_sub(ktime_get(), kt);

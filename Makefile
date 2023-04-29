@@ -4,7 +4,8 @@ TARGET_MODULE := fibdrv_new
 obj-m += $(TARGET_MODULE).o
 fibdrv_new-objs := \
 	fibdrv.o \
-	bn_kernel.o
+	bn_kernel.o \
+	bignum.o
 ccflags-y := -std=gnu99 -Wno-declaration-after-statement
 
 KDIR := /lib/modules/$(shell uname -r)/build

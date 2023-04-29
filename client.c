@@ -8,7 +8,7 @@
 
 #define FIB_DEV "/dev/fibonacci"
 #define TIME_MEASSURE
-// #define RETURN_BY_BUF
+#define RETURN_BY_BUF
 
 int main()
 {
@@ -35,7 +35,7 @@ int main()
         lseek(fd, i, SEEK_SET);
         struct timespec tstart = {0, 0}, tend = {0, 0};
         clock_gettime(CLOCK_MONOTONIC, &tstart);
-        sz = read(fd, buf, 2);
+        sz = read(fd, buf, 4);
         clock_gettime(CLOCK_MONOTONIC, &tend);
         long long usertime = (1e9 * tend.tv_sec + tend.tv_nsec) -
                              (1e9 * tstart.tv_sec + tstart.tv_nsec);
