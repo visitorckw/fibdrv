@@ -8,6 +8,7 @@
 
 #define FIB_DEV "/dev/fibonacci"
 #define TIME_MEASSURE
+// #define RETURN_BY_BUF
 
 int main()
 {
@@ -34,17 +35,24 @@ int main()
         lseek(fd, i, SEEK_SET);
         struct timespec tstart = {0, 0}, tend = {0, 0};
         clock_gettime(CLOCK_MONOTONIC, &tstart);
-        sz = read(fd, buf, 128);
+        sz = read(fd, buf, 2);
         clock_gettime(CLOCK_MONOTONIC, &tend);
         long long usertime = (1e9 * tend.tv_sec + tend.tv_nsec) -
                              (1e9 * tstart.tv_sec + tstart.tv_nsec);
         long long kerneltime = write(fd, write_buf, strlen(write_buf));
         fprintf(outputFile, "%d %lld %lld %lld\n", i, kerneltime, usertime,
                 usertime - kerneltime);
+#ifdef RETURN_BY_BUF
         printf("Reading from " FIB_DEV
                " at offset %d, returned the sequence "
                "%s.\n",
                i, buf);
+#else
+        printf("Reading from " FIB_DEV
+               " at offset %d, returned the sequence "
+               "%lld.\n",
+               i, sz);
+#endif
         printf("Writing to " FIB_DEV ", returned the sequence %lld\n",
                kerneltime);
     }
@@ -52,7 +60,7 @@ int main()
 #ifndef TIME_MEASSURE
     for (int i = 0; i <= offset; i++) {
         lseek(fd, i, SEEK_SET);
-        sz = read(fd, buf, 128);
+        sz = read(fd, buf, 0);
         printf("Reading from " FIB_DEV
                " at offset %d, returned the sequence "
                "%s.\n",
@@ -61,7 +69,7 @@ int main()
 
     for (int i = offset; i >= 0; i--) {
         lseek(fd, i, SEEK_SET);
-        sz = read(fd, buf, 128);
+        sz = read(fd, buf, 0);
         printf("Reading from " FIB_DEV
                " at offset %d, returned the sequence "
                "%s.\n",

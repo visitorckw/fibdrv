@@ -9,6 +9,7 @@
 #include <linux/mutex.h>
 #include <linux/slab.h>
 #include <linux/string.h>
+#include "bn_kernel.h"
 
 MODULE_LICENSE("Dual MIT/GPL");
 MODULE_AUTHOR("National Cheng Kung University, Taiwan");
@@ -22,6 +23,8 @@ MODULE_VERSION("0.1");
  */
 #define MAX_LENGTH 500
 #define TIME_MEASSURE
+
+enum functionOptions { FIB_SEQUENCE, FIB, BN_KERNEL, FAST_DOUBLELING_ITER };
 
 static dev_t fib_dev = 0;
 static struct cdev *fib_cdev;
@@ -120,14 +123,61 @@ static long long fib(long long k, void *buf)
     return len;
 }
 
+static inline uint64_t fast_doubling_iter(uint64_t target)
+{
+    if (target <= 2)
+        return !!target;
+
+    // find first 1
+    uint8_t count = 63 - __builtin_clzll(target);
+    uint64_t fib_n0 = 1, fib_n1 = 1;
+
+    for (uint64_t i = count, fib_2n0, fib_2n1, mask; i-- > 0;) {
+        fib_2n0 = fib_n0 * ((fib_n1 << 1) - fib_n0);
+        fib_2n1 = fib_n0 * fib_n0 + fib_n1 * fib_n1;
+
+        mask = -!!(target & (1UL << i));
+        fib_n0 = (fib_2n0 & ~mask) + (fib_2n1 & mask);
+        fib_n1 = (fib_2n0 & mask) + fib_2n1;
+    }
+    return fib_n0;
+}
+
+static long long bn_fib_loader(long long int k, void *buf)
+{
+    bn *fibptr = bn_alloc(1);
+    bn_fib_fdoubling(fibptr, k);
+    char *p = bn_to_string(fibptr);
+    size_t len = strlen(p) + 1;
+    size_t left = copy_to_user(buf, p, len);
+    bn_free(fibptr);
+    kfree(p);
+    return left;  // return number of bytes that could not be copied
+}
+
 #ifdef TIME_MEASSURE
 static ktime_t kt;
 
-static long long fib_time_proxy(long long k, char *buf)
+static long long fib_time_proxy(long long k,
+                                char *buf,
+                                int func)  // func: choose which function to use
 {
     kt = ktime_get();
-    // long long result = fib_sequence(k);
-    long long result = fib(k, buf);
+    long long result;
+    switch (func) {
+    case 0:
+        result = fib_sequence(k);
+        break;
+    case 1:
+        result = fib(k, buf);
+        break;
+    case 2:
+        result = fast_doubling_iter(k);
+        break;
+    case 3:
+        result = bn_fib_loader(k, buf);
+        break;
+    }
     kt = ktime_sub(ktime_get(), kt);
 
     return result;
@@ -138,7 +188,7 @@ static ssize_t fib_read(struct file *file,
                         size_t size,
                         loff_t *offset)
 {
-    return (ssize_t) fib_time_proxy(*offset, buf);
+    return (ssize_t) fib_time_proxy(*offset, buf, size);
 }
 
 static ssize_t fib_write(struct file *file,
@@ -173,6 +223,7 @@ static ssize_t fib_read(struct file *file,
                         loff_t *offset)
 {
     // return (ssize_t) fib_sequence(*offset);
+    // return (ssize_t) fast_doubling_iter(*offset);
     return (ssize_t) fib(*offset, buf);
 }
 
